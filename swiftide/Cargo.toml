@@ -42,6 +42,9 @@ all = [
 ## Enables Qdrant for storage and retrieval
 qdrant = ["swiftide-integrations/qdrant", "swiftide-core/qdrant"]
 
+## Enables PgVector for storage and retrieval
+pgvector = ["swiftide-integrations/pgvector"]
+
 ## Enables Redis as an indexing cache and storage
 redis = ["swiftide-integrations/redis"]
 
