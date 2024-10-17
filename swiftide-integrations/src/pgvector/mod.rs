@@ -1,3 +1,8 @@
+//! This module integrates with the pgvector database, providing functionalities to create and manage vector collections,
+//! store data, and optimize indexing for efficient searches.
+//!
+//! pgvector is utilized in both the `indexing::Pipeline` and `query::Pipeline` modules.
+
 mod persist;
 mod pgv_table_types;
 

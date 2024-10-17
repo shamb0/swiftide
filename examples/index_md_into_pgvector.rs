@@ -1,7 +1,7 @@
-use std::path::PathBuf;
 /**
-* This example demonstrates how to use the LanceDB integration with Swiftide
+* This example demonstrates how to use the Pgvector integration with Swiftide
 */
+use std::path::PathBuf;
 use swiftide::{
     indexing::{
         self,
@@ -38,7 +38,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let fastembed =
         integrations::fastembed::FastEmbed::try_default().expect("Could not create FastEmbed");
 
-    // Configure lancedb with a default vector size, a single embedding
+    // Configure Pgvector with a default vector size, a single embedding
     // and in addition to embedding the text metadata, also store it in a field
     let pgv_storage = PgVector::builder()
         .try_from_url(pgv_db_url, Some(10))

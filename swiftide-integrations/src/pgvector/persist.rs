@@ -1,3 +1,7 @@
+//! This module implements the `Persist` trait for the `PgVector` struct.
+//! It provides methods for setting up storage, saving individual nodes, and batch-storing multiple nodes.
+//! This integration enables the Swiftide project to use `PgVector` as a storage backend.
+
 use crate::pgvector::pgv_table_types::FieldConfig;
 use crate::pgvector::PgVector;
 use anyhow::Result;

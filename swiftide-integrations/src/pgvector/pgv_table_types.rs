@@ -1,3 +1,8 @@
+//! This module provides functionality to convert a `Node` into a `PostgreSQL` table schema.
+//! This conversion is crucial for storing data in `PostgreSQL`, enabling efficient vector similarity searches
+//! through the `pgvector` extension. The module also handles metadata augmentation and ensures compatibility
+//! with PostgreSQL's required data format.
+
 use crate::pgvector::PgVector;
 use anyhow::{anyhow, Result};
 use pgvector as ExtPgVector;
