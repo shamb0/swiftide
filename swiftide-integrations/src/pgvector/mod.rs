@@ -3,20 +3,20 @@
 //!
 //! pgvector is utilized in both the `indexing::Pipeline` and `query::Pipeline` modules.
 
+#[cfg(test)]
+mod tests;
+
 mod persist;
 mod pgv_table_types;
-
+mod retrieve;
 use anyhow::Result;
 use derive_builder::Builder;
-use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
 use std::fmt;
 
-use pgv_table_types::{FieldConfig, MetadataConfig, VectorConfig};
+use pgv_table_types::{FieldConfig, MetadataConfig, PgDBConnectionPool, VectorConfig};
 
-const PG_POOL_MAX_CONN: u32 = 10;
 const DEFAULT_BATCH_SIZE: usize = 50;
-const DEFAULT_VEC_DIM: i32 = 384;
 
 /// Represents a Pgvector client with configuration options.
 ///
@@ -26,16 +26,16 @@ const DEFAULT_VEC_DIM: i32 = 384;
 #[builder(setter(into, strip_option), build_fn(error = "anyhow::Error"))]
 pub struct PgVector {
     /// Database connection pool.
-    #[builder(default)]
-    connection_pool: Option<PgPool>,
+    #[builder(default = "PgDBConnectionPool::default()")]
+    connection_pool: PgDBConnectionPool,
 
     /// Table name to store vectors in.
     #[builder(default = "String::from(\"swiftide_pgv_store\")")]
     table_name: String,
 
-    /// Size of the vectors to store.
-    #[builder(default = "DEFAULT_VEC_DIM")]
-    vector_size: i32,
+    /// Default sizes of vectors. Vectors can also be of different
+    /// sizes by specifying the size in the vector configuration.
+    vector_size: Option<i32>,
 
     /// Batch size for storing nodes.
     #[builder(default = "Some(DEFAULT_BATCH_SIZE)")]
@@ -50,15 +50,8 @@ pub struct PgVector {
 
 impl fmt::Debug for PgVector {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let connection_status = if let Some(pool) = &self.connection_pool {
-            if pool.is_closed() {
-                "Closed"
-            } else {
-                "Open"
-            }
-        } else {
-            "Not initialized"
-        };
+        // Access the connection pool synchronously and determine the status.
+        let connection_status = self.connection_pool.connection_status();
 
         f.debug_struct("PgVector")
             .field("table_name", &self.table_name)
@@ -83,7 +76,7 @@ impl PgVector {
         PgVectorBuilder::default()
     }
 
-    /// The `get_pool` function retrieves a reference to the connection pool associated with this object.
+    /// Asynchronously retrieves the database connection pool from the `PgDBConnectionPool`.
     ///
     /// # Returns
     ///
@@ -97,19 +90,18 @@ impl PgVector {
     ///
     /// This function does not return any errors.
     /// It will always return a `Some` containing a reference to the `PgPool` if available, or `None` if no pool is set.
-    pub fn get_pool(&self) -> Option<&PgPool> {
-        self.connection_pool.as_ref()
+    pub fn get_pool(&self) -> Result<PgPool> {
+        self.connection_pool.get_pool()
     }
 }
 
 impl PgVectorBuilder {
     /// Tries to create a `PgVectorBuilder` from a given URL.
     ///
-    /// Returns
-    ///
     /// # Arguments
     ///
     /// * `url` - A string slice that holds the URL for the Pgvector client.
+    /// * `connection_max` - Optional maximum number of connections.
     ///
     /// # Returns
     ///
@@ -117,18 +109,16 @@ impl PgVectorBuilder {
     ///
     /// # Errors
     ///
-    /// Errors if client fails build
-    pub async fn try_from_url(
+    /// Errors if the client fails to build or connect to the database, or if the connection pool is not initialized.
+    pub async fn try_connect_to_pool(
         mut self,
         url: impl AsRef<str>,
         connection_max: Option<u32>,
     ) -> Result<Self> {
-        self.connection_pool = Some(Some(
-            PgPoolOptions::new()
-                .max_connections(connection_max.unwrap_or(PG_POOL_MAX_CONN))
-                .connect(url.as_ref())
-                .await?,
-        ));
+        let pool = self.connection_pool.clone().unwrap_or_default();
+
+        self.connection_pool = Some(pool.try_connect_to_url(url, connection_max).await?);
+
         Ok(self)
     }
 

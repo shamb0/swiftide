@@ -3,12 +3,15 @@
 
 use serde_json::json;
 use testcontainers::{
-    core::wait::HttpWaitStrategy, runners::AsyncRunner as _, ContainerAsync, GenericImage,
+    core::{wait::HttpWaitStrategy, IntoContainerPort, Mount, WaitFor},
+    runners::AsyncRunner,
+    ContainerAsync, GenericImage, ImageExt,
 };
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use swiftide_integrations as integrations;
+use temp_dir::TempDir;
 
 pub fn openai_client(
     mock_server_uri: &str,
@@ -68,6 +71,62 @@ pub async fn start_redis() -> (ContainerAsync<GenericImage>, String) {
         port = redis.get_host_port_ipv4(6379).await.unwrap()
     );
     (redis, redis_url)
+}
+
+/// Setup Postgres container.
+/// Returns container server and `server_url`.
+pub async fn start_postgres() -> (ContainerAsync<GenericImage>, String, TempDir) {
+    // Create a temporary directory for Postgres data
+    let temp_dir = TempDir::new().expect("Failed to create temp folder");
+    let temp_data_bind_path = temp_dir.path().to_str().unwrap();
+
+    // Find a free port on the host for Postgres to use
+    let host_port = portpicker::pick_unused_port().expect("No available free port on the host");
+
+    let postgres = testcontainers::GenericImage::new("ankane/pgvector", "v0.5.1")
+        .with_wait_for(WaitFor::message_on_stdout(
+            "database system is ready to accept connections",
+        ))
+        .with_mapped_port(host_port, 5432.tcp())
+        .with_env_var("POSTGRES_USER", "myuser")
+        .with_env_var("POSTGRES_PASSWORD", "mypassword")
+        .with_env_var("POSTGRES_DB", "mydatabase")
+        .with_mount(Mount::bind_mount(
+            temp_data_bind_path,
+            "/var/lib/postgresql/data",
+        ))
+        .start()
+        .await
+        .expect("Failed to start Postgres container");
+
+    // // Define a health check to verify if PostgreSQL is ready
+    // let healthcheck = Healthcheck::default()
+    //     .with_cmd(vec!["pg_isready", "-U", "myuser", "-d", "mydatabase"])
+    //     .with_interval(Duration::from_secs(10))  // Check every 10 seconds
+    //     .with_retries(5);  // Retry up to 5 times before failing
+
+    // let postgres = testcontainers::GenericImage::new("ankane/pgvector", "v0.5.1")
+    //     .with_mapped_port(host_port, 5432.tcp())
+    //     .with_env_var("POSTGRES_USER", "myuser")
+    //     .with_env_var("POSTGRES_PASSWORD", "mypassword")
+    //     .with_env_var("POSTGRES_DB", "mydatabase")
+    //     .with_healthcheck(healthcheck)
+    //     .with_wait_for(WaitFor::Healthcheck)
+    //     .with_mount(Mount::bind_mount(
+    //         temp_data_bind_path,
+    //         "/var/lib/postgresql/data",
+    //     ))
+    //     .start()
+    //     .await
+    //     .expect("Failed to start Postgres container");
+
+    // Construct the connection URL using the dynamically assigned port
+    let postgres_url = format!(
+        "postgresql://myuser:mypassword@127.0.0.1:{}/mydatabase",
+        host_port
+    );
+
+    (postgres, postgres_url, temp_dir)
 }
 
 /// Mock embeddings creation endpoint.

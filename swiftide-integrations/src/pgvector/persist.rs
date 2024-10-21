@@ -1,8 +1,6 @@
 //! This module implements the `Persist` trait for the `PgVector` struct.
 //! It provides methods for setting up storage, saving individual nodes, and batch-storing multiple nodes.
 //! This integration enables the Swiftide project to use `PgVector` as a storage backend.
-
-use crate::pgvector::pgv_table_types::FieldConfig;
 use crate::pgvector::PgVector;
 use anyhow::Result;
 use async_trait::async_trait;
@@ -17,12 +15,7 @@ impl Persist for PgVector {
     async fn setup(&self) -> Result<()> {
         tracing::info!("Setting up table {} for PgVector", &self.table_name);
 
-        let mut tx = self
-            .connection_pool
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Database connection not established"))?
-            .begin()
-            .await?;
+        let mut tx = self.connection_pool.get_pool()?.begin().await?;
 
         // Create extension
         let sql = "CREATE EXTENSION IF NOT EXISTS vector";
@@ -34,16 +27,7 @@ impl Persist for PgVector {
         sqlx::query(&create_table_sql).execute(&mut *tx).await?;
 
         // Create HNSW index
-        let vector_field = self
-            .fields
-            .iter()
-            .find(|f| matches!(f, FieldConfig::Vector(_)))
-            .ok_or_else(|| anyhow::anyhow!("No vector field found in configuration"))?;
-        let index_sql =
-            format!(
-            "CREATE INDEX IF NOT EXISTS {}_embedding_idx ON {} USING hnsw ({} vector_cosine_ops)",
-            self.table_name, self.table_name, vector_field.field_name()
-        );
+        let index_sql = self.create_index_sql()?;
         tracing::debug!("Executing CREATE INDEX SQL: {}", index_sql);
         sqlx::query(&index_sql).execute(&mut *tx).await?;
 
