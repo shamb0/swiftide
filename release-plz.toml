@@ -1,8 +1,8 @@
 [workspace]
-changelog_update = false
 changelog_path = "./CHANGELOG.md"
 #changelog_config = "cliff.toml"
 git_tag_name = "v{{ version }}"
+changelog_update = false
 git_tag_enable = false
 git_release_enable = false
 repo_url = "https://github.com/bosun-ai/swiftide"
@@ -19,6 +19,8 @@ changelog_include = [
   "swiftide-integrations",
   "swiftide-query",
   "swiftide-test-utils",
+  "swiftide-agents",
+  "swiftide-macros",
 ]
 changelog_update = true
 
@@ -28,6 +30,7 @@ commit_parsers = [
   { message = "^fix*", group = "<!-- 1 -->Bug fixes" },
   { message = "^perf*", group = "<!-- 2 -->Performance" },
   { message = "^chore*", group = "<!-- 3 -->Miscellaneous" },
+  { message = "^refactor*", group = "<!-- 3 -->Miscellaneous" },
 ]
 
 # changelog header
@@ -44,7 +47,9 @@ body = """
 {% endif -%}
 
 {% macro commit(commit) -%}
+{% if commit.id -%}
 - [{{ commit.id | truncate(length=7, end="") }}]({{ "https://github.com/bosun-ai/swiftide/commit/" ~ commit.id }}) \
+{% endif -%}
 {% if commit.scope %}*({{commit.scope | default(value = "uncategorized") | lower }})* {% endif %}\
 {%- if commit.breaking %} [**breaking**]{% endif %} \
 {{ commit.message | upper_first | trim }}\
